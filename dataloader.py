@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 import numpy as np
-import time, os
-from torch.utils.data import Dataset
+import os
+from torch.utils.data import DataLoader, Dataset
 from codes_dcm_new.Knee_training_lib import get_index
-
+from collections import Counter
 
 class KneeManager(object):
-    def __init__(self, options, train_args, labels):
+    def __init__(self, options, train_args, labels, out_class):
 
         self.train_args = train_args
         self.options = options
@@ -16,7 +16,10 @@ class KneeManager(object):
         self._path = dict()
         self._path['save_path'] = os.path.join(os.getcwd(), 'Fusion_Results', self.options['trial_name'], 'Reg')
         self.labels = labels
-        self.criterion = torch.nn.BCELoss()
+        if out_class == 1:
+            self.criterion = nn.BCELoss()
+        if out_class == 2:
+            self.criterion = nn.CrossEntropyLoss()
 
         """ Initialize model """
         self.net = None
@@ -39,11 +42,11 @@ class KneeManager(object):
         if not os.path.isdir(self._path['save_path'] + str(case_num)):
             os.mkdir(self._path['save_path'] + str(case_num))
 
-        """ Labels """
         all_index, _ = get_index(self._path['save_path'] + str(case_num), case_num, self.options['sampling'],
                                  self.options['use_val'], self.labels['label'])
 
         return all_index
+
 
 class KneeData(Dataset):
 
@@ -60,26 +63,28 @@ class KneeData(Dataset):
 
         self.slice_range = Manager.options['slice_range']
 
+        self.LL = np.load('data/LL_pain3.npy')
+        self.RR = np.load('data/RR_pain3.npy')
+
     def __len__(self):
         return len(self.index_list)
 
     def __getitem__(self, idx):
 
         slice_range = self.slice_range
-
         index = self.index_list[idx]
+
+        """ slice from existing matrices"""
         id_all = self.id_list[index]
         if type(idx) == int:
             id_all = [id_all]
-
-        """ slice from existing matrices"""
         data = []
         for ii in range(len(self.load_list)):
             x = []
             for id in id_all:
                 temp = np.load(os.path.join(self.img_dir, self.load_list[ii], id + '.npy'), mmap_mode='r')
-                temp = temp / temp.max()
                 temp = temp[:, :, slice_range[ii]] # 224 X 224 X Slices
+                temp = temp / temp.max()
                 temp = np.expand_dims(temp, axis=0)  # 1 X 224 X 224 X Slices
                 if type(idx) != int:
                     temp = np.expand_dims(temp, axis=1)  # 1 X 1 X 224 X 224 X Slices
@@ -95,3 +100,4 @@ class KneeData(Dataset):
         label = torch.from_numpy(label)
 
         return data, label, idx
+
