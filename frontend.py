@@ -1,151 +1,254 @@
-from model import DefModel
-from dataloader import KneeManager, KneeData
-from util import get_args, run_model
-from util import get_label_KL_uni as get_label
-import os
+import os, time, imageio
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, Dataset
+import numpy as np
+from util import KneeData, run_model
 from collections import Counter
+from util import get_args, KneeManager
+from dict_labels import get_label_pain_uni as get_label
 
 
 class KneeCAM:
-    def __init__(self):
-        self.Train_args = vars(get_args())
-        self.Options = {'CopyChannel':True,
-                        'sampling':'10fold',
-                        'use_val':False,
-                        'network_choice':'shallow',
-                        'fusion_method':'cat',
-                        'trial_name':'KL_cor_alex_cat_attention',
-                        'load_list':['SAG_IW_TSE_LEFT_resize2', 'SAG_IW_TSE_RIGHT_resize2']}
-        self.img_dir = 'data/'
-        self.Manager = KneeManager(options=self.Options, train_args=self.Train_args, labels=get_label())
-        self.text_name = 'out_' + Options['network_choice'] + '_' + Options['fusion_method'] + '_' + '.txt'
-        self.use_gpu = [None]
-        if not os.path.isdir('Fusion_Results/' + Options['trial_name']):
-            os.mkdir('Fusion_Results/' + Options['trial_name'])
+    def __init__(self, out_class):
+        torch.manual_seed(100)
+
+        """ Training Parameters"""
+        train_args = vars(get_args())
+        train_args['NumEpochs'] = 300
+        train_args['BatchSize'] = 16 * 4
+        train_args['ValGamma'] = 0.9
+        train_args['ValLr'] = 1e-6 * 5
+        train_args['ValWeightDecay'] = 0.00
+        train_args['RunPar'] = True
+        train_args['use_gpu'] = [0]
+
+        """ Options """
+        options = {'sampling': 'random7',
+                   'use_val': True,
+                   'img_dir': 'data/',
+                   'load_list': ['SAG_IW_TSE_LEFT_UniA', 'SAG_IW_TSE_RIGHT_UniA'],
+                   'slice_range': [None, None],
+                   'network_choice': 'present',
+                   'fusion_method': 'cat',
+                   'trial_name': 'Pain_uni_shallow_2'}
+
+        """ Create and save Manager"""
+        self.Manager = KneeManager(options=options, train_args=train_args, labels=get_label(), out_class=out_class)
+        print(self.Manager.options)
+        print(self.Manager.train_args)
+
+        if not os.path.isdir('Fusion_Results/' + self.Manager.options['trial_name']):
+            os.mkdir('Fusion_Results/' + self.Manager.options['trial_name'])
+
         if not os.path.isdir('cam_print/'):
             os.mkdir('cam_print/')
 
-    def train(self, case_num, slice_name, dataset, testing, cont):
-        """ Prepare training """
-        model_ini = DefModel(Manager=self.Manager, zlen=len(self.Manager.options['slice_range'][0]))
-        self.Manager.init_model(model_ini)
+    def prep_training(self, num_case, num_loc, text_name, training, cont):
+        Manager = self.Manager
+        options = Manager.options
 
-        all_index = self.Manager.prep_case(self.case_num)
-        dirname = os.path.join(self.Manager._path['save_path'] + str(self.case_num), slice_name)
+        """""""""
+        all_index: dict() with keys: {'train_index_0': training indices of class 0,
+                                      'train_index_1': training indices of class 1,
+                                      'val_index_0': validation indices of class 0,
+                                      'val_index_1': validation indices of class 1,
+                                      'test_index': test indices
+        """""""""
+        all_index = Manager.prep_case(num_case)
+        dirname = os.path.join(Manager._path['save_path'] + str(num_case), str(num_loc))
 
         self.Manager.net.cuda()
         """ load trained model """
-        if testing or cont:
+        if training == 'testing' or cont:
             print('load check pts:')
-            pretrained_dict = torch.load(os.path.join(dirname, 'checkpts'), map_location="cuda:0")
-            self.Manager.net.load_state_dict(pretrained_dict)
+            pretrained_dict = torch.load(os.path.join(dirname, 'PRE0'), map_location="cuda:0")
+            Manager.net.load_state_dict(pretrained_dict)
 
         """ Prepare  Model"""
-        if self.Manager.train_args['RunPar']:
-            self.Manager.net = nn.DataParallel(self.Manager.net, device_ids=[0, 1])
+        if Manager.train_args['RunPar']:
+            Manager.net = nn.DataParallel(Manager.net)
 
         if not os.path.isdir(dirname):
             os.mkdir(dirname)
-        text_file = os.path.join(self.Manager._path['save_path'] + str(self.case_num), self.text_name)
+        text_file = os.path.join(Manager._path['save_path'] + str(num_case), text_name)
 
         print('Overall dataset:')
-        print('Length:  ' + str(len(self.Manager.labels['ID_selected'])))
-        print('Labels:  ' + str(Counter(self.Manager.labels['label'])))
+        print('Length:  ' + str(len(Manager.labels['ID_selected'])))
+        print('Labels:  ' + str(Counter(Manager.labels['label'])))
 
         print('Prep training set:')
-        self.train_data = dataset(Manager=self.Manager, img_dir=self.img_dir, load_list=self.Manager.options['load_list'],
-                             index_list=np.concatenate([all_index['train_index_1'], all_index['train_index_0']],
-                                                       axis=0),
-                             id_list=self.Manager.labels['ID_selected'], labels=self.Manager.labels['label'])
+        train_data = KneeData(Manager=Manager, img_dir=options['img_dir'], load_list=options['load_list'],
+                              index_list=np.concatenate([all_index['train_index_0'], all_index['train_index_1']], axis=0),
+                              id_list=Manager.labels['ID_selected'], labels=Manager.labels['label'])
 
-        if self.Manager.options['use_val']:
+        if options['use_val']:
             print('Prep validation set:')
-            self.val_data = dataset(Manager=self.Manager, img_dir=self.img_dir, load_list=self.Manager.options['load_list'],
-                               index_list=np.concatenate([all_index['val_index_0'], all_index['val_index_1']], axis=0),
-                               id_list=self.Manager.labels['ID_selected'], labels=self.Manager.labels['label'])
+            val_data = KneeData(Manager=Manager, img_dir=options['img_dir'], load_list=options['load_list'],
+                                index_list=np.concatenate([all_index['val_index_0'], all_index['val_index_1']], axis=0),
+                                id_list=Manager.labels['ID_selected'], labels=Manager.labels['label'])
         else:
             val_data = ''
 
         print('Prep testing set:')
-        self.test_data = dataset(Manager=self.Manager, img_dir=self.img_dir, load_list=self.Manager.options['load_list'],
-                            index_list=all_index['test_index'],
-                            id_list=self.Manager.labels['ID_selected'], labels=self.Manager.labels['label'])
+        test_data = KneeData(Manager=Manager, img_dir=options['img_dir'], load_list=options['load_list'],
+                             index_list=all_index['test_index'],
+                             id_list=Manager.labels['ID_selected'], labels=Manager.labels['label'])
 
-        self.train_load = DataLoader(self.train_data, batch_size=self.Manager.train_args['BatchSize'], shuffle=not testing, num_workers=4)
-        self.val_load = DataLoader(self.val_data, batch_size=self.Manager.train_args['BatchSize'], shuffle=False, num_workers=4)
-        self.test_load = DataLoader(self.test_data, batch_size=self.Manager.train_args['BatchSize'], shuffle=False, num_workers=4)
+        train_load = DataLoader(train_data, batch_size=Manager.train_args['BatchSize'], shuffle=True, num_workers=4)
+        val_load = DataLoader(val_data, batch_size=Manager.train_args['BatchSize'], shuffle=False, num_workers=4)
+        test_load = DataLoader(test_data, batch_size=Manager.train_args['BatchSize'], shuffle=False, num_workers=4)
 
         """ train model """
-        train_out, val_out, test_out = self._train(text_file, dirname, testing=testing, use_gpu=self.use_gpu)
+        train_out, val_out, test_out = self.eval_model(Manager, text_file, dirname, train_load, val_load, test_load, train_data, val_data, test_data,
+                                                       training=training)
 
         """ outputs """
-        if testing:
-            outdir = os.path.join(os.path.expanduser('~'), 'Dropbox/Z_DL/training_outputs/',
-                                  self.Manager.options['trial_name'])
+        if training == 'testing':
+            outdir = os.path.join(os.path.expanduser('~'), 'Dropbox/Z_DL/training_outputs/', options['trial_name'])
             try:
                 os.mkdir(outdir)
             except:
                 print('outdir exist')
-            np.save(os.path.join(outdir, 'train_out_' + str(case_num) + '.npy'), train_out)
-            if Manager.options['use_val']:
-                np.save(os.path.join(outdir, 'val_out_' + str(case_num) + '.npy'), val_out)
-            np.save(os.path.join(outdir, 'test_out_' + str(case_num) + '.npy'), test_out)
-            np.save(os.path.join(outdir, 'test_index_' + str(case_num) + '.npy'), test_data.index_list)
-            np.save(os.path.join(outdir, 'test_label_' + str(case_num) + '.npy'), self.Manager.labels['label'][test_data.index_list])
+            np.save(os.path.join(outdir, 'train_out_' + str(num_case) + '.npy'), train_out)
+            if options['use_val']:
+                np.save(os.path.join(outdir, 'val_out_' + str(num_case) + '.npy'), val_out)
+            np.save(os.path.join(outdir, 'test_out_' + str(num_case) + '.npy'), test_out)
+            np.save(os.path.join(outdir, 'test_index_' + str(num_case) + '.npy'), test_data.index_list)
+            np.save(os.path.join(outdir, 'test_label_' + str(num_case) + '.npy'), Manager.labels['label'][test_data.index_list])
 
-    def _train(self, text_file, dirname, testing, use_gpu):
+    def eval_model(self, Manager, text_file, dirname, train_load, val_load, test_load,
+                   train_data, val_data, test_data, training):
+
+        options = Manager.options
+        train_args = Manager.train_args
 
         """Preparing for training"""
         best_val_loss = np.inf
         best_val_auc = 0
 
-        if testing:
-            self.Manager.train_args['NumEpochs'] = 1
+        if training == 'testing':
+            train_args['NumEpochs'] = 1
         else:
             text_file = open(text_file, "w")
 
-        for t in range(self.Manager.train_args['NumEpochs']):
+        for t in range(Manager.train_args['NumEpochs']):
             tini = time.time()
 
-            train_acc, train_loss, train_auc, _, train_out = run_model(t, Manager=self.Manager,
-                                                                        data_load=self.train_load,
-                                                                        train_data=self.train_data,
-                                                                        train=not testing, use_gpu=use_gpu)
+            train_acc, train_loss, train_auc, _, train_out, train_collect = run_model(t, Manager=Manager,
+                                                                                      data_load=train_load,
+                                                                                      train_data=train_data,
+                                                                                      phase=training,
+                                                                                      use_gpu=train_args['use_gpu'])
 
-            if Manager.options['use_val']:
-                val_acc, val_loss, val_auc, _, val_out = run_model(t, Manager=self.Manager,
-                                                                    data_load=self.val_load,
-                                                                    train_data=self.val_data,
-                                                                    train=False, use_gpu=use_gpu)
+            if options['use_val']:
+                val_acc, val_loss, val_auc, _, val_out, val_collect = run_model(t, Manager=Manager,
+                                                                                data_load=val_load,
+                                                                                train_data=val_data,
+                                                                                phase='val',
+                                                                                use_gpu=train_args['use_gpu'])
             else:
                 val_acc = 0
                 val_auc = 0
                 val_loss = 0
-                val_out = None
 
-            test_acc, test_loss, test_auc, _, test_out = run_model(t, Manager=self.Manager,
-                                                                    data_load=test_load,
-                                                                    train_data=test_data,
-                                                                    train=False, use_gpu=use_gpu)
+            test_acc, test_loss, test_auc, _, test_out, test_collect = run_model(t, Manager=Manager,
+                                                                                 data_load=test_load,
+                                                                                 train_data=test_data,
+                                                                                 phase='test',
+                                                                                 use_gpu=train_args['use_gpu'])
 
-            self.Manager.scheduler.step()
+            if t % 10 == 0:
+                print_cams(test_collect, t, 2)
+
+            Manager.scheduler.step()
 
             """Save Model"""
-            if (val_loss <= best_val_loss) and not testing:
+            if (val_loss <= best_val_loss) and training == 'training':
                 best_val_loss = val_loss
-                if self.Manager.train_args['RunPar']:
-                    torch.save(self.Manager.net.module.state_dict(), os.path.join(dirname, 'checkpts'))
+                if Manager.train_args['RunPar']:
+                    torch.save(Manager.net.module.state_dict(), os.path.join(dirname, 'PRE0'))
                 else:
-                    torch.save(self.Manager.net.state_dict(), os.path.join(dirname, 'checkpts'))
+                    torch.save(Manager.net.state_dict(), os.path.join(dirname, 'PRE0'))
+
+                np.save(os.path.join(dirname, 'train_features'), train_collect['features'])
+                np.save(os.path.join(dirname, 'val_features'), val_collect['features'])
+                np.save(os.path.join(dirname, 'test_features'), test_collect['features'])
+
+                np.save(os.path.join(dirname, 'train_out'), train_collect['out'])
+                np.save(os.path.join(dirname, 'val_out'), val_collect['out'])
+                np.save(os.path.join(dirname, 'test_out'), test_collect['out'])
+
+                np.save(os.path.join(dirname, 'train_labels'), train_collect['labels'])
+                np.save(os.path.join(dirname, 'val_labels'), val_collect['labels'])
+                np.save(os.path.join(dirname, 'test_labels'), test_collect['labels'])
+
+            if (val_auc >= best_val_auc) and training == 'training':
+                best_val_auc = val_auc
+                if Manager.train_args['RunPar']:
+                    torch.save(Manager.net.module.state_dict(), os.path.join(dirname, 'PRE1'))
+                else:
+                    torch.save(Manager.net.state_dict(), os.path.join(dirname, 'PRE1'))
 
             """Print Stats"""
             print('{} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.1f}'.format(t, train_acc, val_acc, test_acc, train_loss,
                                                                                              val_loss, test_loss, val_auc, test_auc, time.time() - tini))
 
-            if not testing:
+            if training == 'training':
                 text_file.write('{} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.1f} \n'
                       .format(t, train_acc, val_acc, test_acc, train_loss, val_loss, test_loss, val_auc, test_auc, time.time()-tini))
                 text_file.flush()
 
         return train_out, val_out, test_out
+
+
+def print_cams(collect, t, lenx):
+    for cc in range(40, 41):
+        out = dcm_n_att(collect, cc, 0, 1, collect['labels'][cc])
+        if lenx == 4:
+            outB = dcm_n_att(collect, cc, 2, 3, collect['labels'][cc])
+            out = np.concatenate([out, outB], axis=0)
+
+        out = out[::2, ::2]
+
+        if collect['labels'][cc] == 1:
+            imageio.imwrite('cam_print/' + str(cc) + '_' + str(t) + '_L.jpg', out)
+        if collect['labels'][cc] == 0:
+            imageio.imwrite('cam_print/' + str(cc) + '_' + str(t) + '_R.jpg', out)
+
+
+def dcm_n_att(collect, cc, n1, n2, label):
+    crop_img0 = []
+    crop_img1 = []
+    att_img0 = []
+    att_img1 = []
+    att_diff = []
+
+    for zz in range(collect['x_cropped'][0].shape[4]):
+        crop_img0.append(collect['x_cropped'][n1][cc, 0, :, :, zz])
+        crop_img1.append(collect['x_cropped'][n2][cc, 0, :, :, zz])
+        att_img0.append(collect['attention_maps'][n1][cc, zz, :, :])
+        att_img1.append(collect['attention_maps'][n2][cc, zz, :, :])
+        if label == 1:
+            att_diff.append(att_img0[zz] - att_img1[zz])
+        if label == 0:
+            att_diff.append(att_img1[zz] - att_img0[zz])
+
+    crop_img0 = npy_2_uint8(np.concatenate(crop_img0, axis=1))
+    crop_img1 = npy_2_uint8(np.concatenate(crop_img1, axis=1))
+    att_img0 = (np.concatenate(att_img0, axis=1))
+    att_img1 = (np.concatenate(att_img1, axis=1))
+    att_img = npy_2_uint8(np.concatenate([att_img0, att_img1], axis=0))
+    att_diff = npy_2_uint8(np.concatenate(att_diff, axis=1))
+
+    return np.concatenate([crop_img0, crop_img1, att_img, att_diff], axis=0)
+
+
+def npy_2_uint8(x):
+    xmin = x.min()
+    xmax = x.max()
+    x = (x - xmin) / (xmax - xmin)
+    assert (x.max() == 1 and x.min() == 0)
+    x = x * 255
+    return x.astype(np.uint8)
 
