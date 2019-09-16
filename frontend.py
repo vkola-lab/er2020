@@ -7,7 +7,7 @@ from util import KneeData, run_model
 from collections import Counter
 from util import get_args, KneeManager
 from dict_labels import get_label_pain_uni as get_label
-
+#import cv2, glob
 
 class KneeCAM:
     def __init__(self, out_class):
@@ -22,6 +22,10 @@ class KneeCAM:
         train_args['ValWeightDecay'] = 0.00
         train_args['RunPar'] = True
         train_args['use_gpu'] = [0]
+
+        if train_args['registration']:
+            print('Perform Linear Registration')
+            registration(['SAG_IW_TSE_LEFT', 'SAG_IW_TSE_RIGHT'])
 
         """ Options """
         options = {'sampling': 'random7',
@@ -251,4 +255,43 @@ def npy_2_uint8(x):
     assert (x.max() == 1 and x.min() == 0)
     x = x * 255
     return x.astype(np.uint8)
+
+
+def image_regis(ratio, template, target, warp_mode, iters, eps):
+
+    sz_ori = template.shape
+    trans_template = cv2.resize(template,(sz_ori[0]//ratio,sz_ori[1]//ratio))
+    trans_target = cv2.resize(target, (sz_ori[0]//ratio, sz_ori[1]//ratio))
+    warp_matrix = np.eye(2, 3, dtype=np.float32)
+
+    criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, iters, eps)
+
+    (cc, warp_matrix) = cv2.findTransformECC(trans_template, trans_target, warp_matrix, warp_mode, criteria)
+    warp_matrix[0, 2] = warp_matrix[0, 2] * ratio
+    warp_matrix[1, 2] = warp_matrix[1, 2] * ratio
+
+    return warp_matrix
+
+
+def uint16_to_8(x):
+    return (x.astype(np.float16) / x.max() * 255).astype(np.uint8)
+
+
+def registration(sequences):
+    for seq in sequences:
+        print('Registrating: ' + seq)
+        cases = glob.glob('data/raw/' + seq + '/*')
+        template = uint16_to_8(np.load(cases[0])[:, :, 18])
+
+        for x in cases:
+            target = uint16_to_8(np.load(x)[:, :, 18])
+            name = x.split('/')[-1]
+
+            warp_matrix = image_regis(ratio=2, template=template, target=target,
+                                      warp_mode=cv2.MOTION_TRANSLATION, iters=500, eps=1e-10)
+
+            transformed = cv2.warpAffine(uint16_to_8(np.load(x)), warp_matrix, target.shape[:2],
+                                         flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+
+            np.save('data/registered/' + seq + '/' + name, transformed)
 
