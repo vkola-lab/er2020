@@ -25,7 +25,7 @@ Name of sequences contain
 SAG_IW_TSE_LEFT & SAG_IW_TSE_RIGHT
 ```
 
-## Usage
+## Examples
 To start a fresh training with learning rate of 1e-4, batch size of 64, and learning rate decay of 0.9
 ```bash
 $ python main.py --lr 0.0001 --bs 64 --gamma 0.9
@@ -39,8 +39,7 @@ To continue a training from saved checkpoint:
 $ python main.py --c
 ```
 
-## <a name="documentation"></a>Documentation
-Arguments:
+## <a name="Arguments"></a>Arguments
 
 1 . `--rp`:
 >> Run with multiple GPUs paralleling.
