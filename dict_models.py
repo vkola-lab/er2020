@@ -4,7 +4,6 @@ import torch
 #from encoding.nn import BatchNorm2d
 from torch.nn import BatchNorm2d
 
-
 class KneeNet(nn.Module):
     def __init__(self, FilNum):
         super(KneeNet, self).__init__()

@@ -2,7 +2,6 @@ from frontend import KneeCAM
 from dict_models import DefModel
 from fusion import fusion
 
-
 def main():
     num_case = 0
     CAM = KneeCAM(out_class=2)
