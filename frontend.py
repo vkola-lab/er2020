@@ -1,4 +1,4 @@
-import os, time, imageio
+import os, time, glob, imageio
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
@@ -7,7 +7,7 @@ from util import KneeData, run_model
 from collections import Counter
 from util import get_args, KneeManager
 from dict_labels import get_label_pain_uni as get_label
-#import cv2, glob
+import cv2, glob, scipy.ndimage
 
 class KneeCAM:
     def __init__(self, out_class):
@@ -24,18 +24,18 @@ class KneeCAM:
         train_args['use_gpu'] = [0]
 
         if train_args['registration']:
-            print('Perform Linear Registration')
-            registration(['SAG_IW_TSE_LEFT', 'SAG_IW_TSE_RIGHT'])
+            print('Perform Examples of Linear Registration')
+            registration(['SAG_IW_TSE_LEFT']) #, 'SAG_IW_TSE_RIGHT'])
 
         """ Options """
         options = {'sampling': 'random7',
                    'use_val': True,
-                   'img_dir': 'data/',
-                   'load_list': ['SAG_IW_TSE_LEFT_UniA', 'SAG_IW_TSE_RIGHT_UniA'],
+                   'img_dir': 'data/registered/',
+                   'load_list': ['SAG_IW_TSE_LEFT', 'SAG_IW_TSE_RIGHT'],
                    'slice_range': [None, None],
                    'network_choice': 'present',
                    'fusion_method': 'cat',
-                   'trial_name': 'Pain_uni_shallow_2'}
+                   'trial_name': 'Pain_uni_present'}
 
         """ Create and save Manager"""
         self.Manager = KneeManager(options=options, train_args=train_args, labels=get_label(), out_class=out_class)
@@ -290,8 +290,13 @@ def registration(sequences):
             warp_matrix = image_regis(ratio=2, template=template, target=target,
                                       warp_mode=cv2.MOTION_TRANSLATION, iters=500, eps=1e-10)
 
-            transformed = cv2.warpAffine(uint16_to_8(np.load(x)), warp_matrix, target.shape[:2],
-                                         flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+            y = cv2.warpAffine(uint16_to_8(np.load(x)), warp_matrix, target.shape[:2],
+                flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
 
-            np.save('data/registered/' + seq + '/' + name, transformed)
+            y = y[77: -77, 50: -100, :]
+            y[y > 800] = 800
+
+            y = scipy.ndimage.zoom(y, (224 / 294, 224 / 294, 1))
+
+            np.save('data/registered/' + seq + '/' + name, y)
 

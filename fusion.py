@@ -86,7 +86,7 @@ def fusion(Manager, case_num, n_features):
                     running_index_batch = running_index[i * running_batch:(i + 1) * running_batch]
 
                 """ Batch data and label"""
-                if phase == 'train1':
+                if phase == 'train':
                     inputs = torch.from_numpy(all_train_features[running_index_batch, :].astype(
                         np.float32))
                     labels = torch.from_numpy(all_train_labels[running_index_batch].astype(np.float32))
@@ -110,7 +110,7 @@ def fusion(Manager, case_num, n_features):
                 preds = ((outputs[:, 0]) >= 0.5)
                 loss = criterion(outputs, labels)
 
-                if phase == 'train1':
+                if phase == 'train':
                     loss.backward()
                     optimizer.step()
 
@@ -129,7 +129,7 @@ def fusion(Manager, case_num, n_features):
             epoch_loss = running_loss / len(running_index)
             epoch_acc = running_corrects / len(running_index)
 
-            if phase == 'train1':
+            if phase == 'train':
                 TrainLoss = epoch_loss
                 TrainAcc = epoch_acc
             if phase == 'val':

@@ -4,9 +4,9 @@ from fusion import fusion
 
 
 def main():
-    num_case = 3
+    num_case = 0
     CAM = KneeCAM(out_class=2)
-    for num_loc in range(3, 4):
+    for num_loc in range(0, 23):
         CAM.Manager.options['slice_range'][0] = list(range(num_loc, num_loc + 1, 1))
         CAM.Manager.options['slice_range'][1] = list(range(num_loc, num_loc + 1, 1))
 
@@ -19,7 +19,7 @@ def main():
         CAM.Manager.init_model(model_ini)
         CAM.prep_training(num_case, num_loc, text_name, training='training', cont=False)
 
-    #fusion(CAM.Manager, num_case, 512)
+    fusion(CAM.Manager, num_case, 512)
 
 
 if __name__ == "__main__":
