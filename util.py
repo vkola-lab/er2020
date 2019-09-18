@@ -1,26 +1,22 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import time, os, random
-from torch.utils.data import DataLoader, Dataset
 from optparse import OptionParser
-from codes_dcm_new.Knee_training_lib import get_index
-from collections import Counter
 from sklearn import metrics
 
 
 def get_args():
     parser = OptionParser()
     parser.add_option('--rp', dest='RunPar', default=False)
-    parser.add_option('--l1', dest='UseL1', default=False)
-    parser.add_option('--l1v', dest='ValL1Factor', default=0.01, type='float')
-    parser.add_option('--epochs', dest='NumEpochs', default=300, type='float')
-    parser.add_option('--bs', dest='BatchSize', default=50, type='int')
-    parser.add_option('--lr', dest='ValLr', default=0.0002, type='float')
-    parser.add_option('--l2', dest='ValWeightDecay', default=0.00, type='float')
+    parser.add_option('--r', action="store_true", dest="registration")
+    parser.add_option('--c', action="store_true", dest="continue")
+    parser.add_option('--lr', dest='ValLr', default=0.0001, type='float')
     parser.add_option('--gamma', dest='ValGamma', default=1.0, type='float')
-    parser.add_option('--bstep', dest='BStep', default=10, type='int')
+    parser.add_option('--epochs', dest='NumEpochs', default=500, type='float')
+    parser.add_option('--bs', dest='BatchSize', default=64, type='int')
+    parser.add_option('--l1', dest='UseL1', default=False)
+    parser.add_option('--l1v', dest='ValL1Factor', default=0.00, type='float')
+    parser.add_option('--l2', dest='ValWeightDecay', default=0.00, type='float')
 
     (options, args) = parser.parse_args()
     return options
@@ -81,30 +77,25 @@ def run_model(t, Manager, data_load, train_data, phase, use_gpu):
                 attention_maps = F.upsample_bilinear(attention_map[ii], size=(x[0].size(2), x[0].size(3)))  # (B X M X H X W)
                 collect['attention_maps'][ii].append(attention_maps.cpu().numpy())
 
-        """ collect cropped images"""
+        """ collect images"""
         if (t % 1 == 0):  # and phase == 'test':
             for ii in range(len(x)):
                 collect['x_cropped'][ii].append(x[ii].cpu().numpy())
 
-        if out.shape[1] == 1:
-            preds = ((out[:,0]) >= 0.5)
-            loss = Manager.criterion(out[:,0], labels.float()) * out.shape[0]
-        else:
-            _, preds = torch.max(out.data, 1)
-            loss = Manager.criterion(out, labels) * out.shape[0]
+
+        _, preds = torch.max(out.data, 1)
+        loss = Manager.criterion(out, labels) * out.shape[1]
 
         test_out.append(out.data.cpu().numpy())
-        test_loss.append(loss.item())
-        # Prediction.
+        test_loss.append(loss.item() * out.shape[0] / out.shape[1])
         test_total += labels.shape[0]
         test_correct += np.sum(preds.cpu().numpy() == labels.cpu().numpy())
 
         """ Backward pass."""
         if phase == 'training':
             loss.backward()
-            if test_total == len(train_data):
-                Manager.optimizer.step()
-                Manager.optimizer.zero_grad()
+            Manager.optimizer.step()
+            Manager.optimizer.zero_grad()
 
     """ collect attention maps and cropped images and sort by index"""
     if (t % 1 == 0): #and phase == 'test':
@@ -132,7 +123,6 @@ def run_model(t, Manager, data_load, train_data, phase, use_gpu):
     auc0, auc1 = cal_auc(y=train_data.labels[train_data.index_list], pred=test_out)
 
     return test_acc, test_loss, auc0, auc1, test_out, collect
-
 
 
 

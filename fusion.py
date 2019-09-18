@@ -70,12 +70,12 @@ def fusion(Manager, case_num, n_features):
                 running_batch = batch_size
 
             if phase == 'val':
-                NetA.train(False)  # Set model to training mode
+                NetA.train(False)  # Set model to testing mode
                 running_index = val_index
                 running_batch = batch_size
 
             if phase == 'test':
-                NetA.train(False)  # Set model to training mode
+                NetA.train(False)  # Set model to testing mode
                 running_index = test_index
                 running_batch = batch_size
 

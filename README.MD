@@ -7,7 +7,8 @@ The tool was developped based on the following dependencies:
 1. PyTorch (1.1 or greater).
 2. NumPy (1.16 or greater).
 3. Scipy (1.30 or greater)
-3. OpenCV (3.4.2 or greater)
+4. OpenCV (3.4.2 or greater)
+5. scikit-learn (0.21.2 or greater)
 
 Please note that the dependencies may require Python 3.6 or greater. It is recommended to install and maintain all packages using [`conda`](https://www.anaconda.com/). For installation of GPU accelerated PyTorch, additional effort may be required. Please check the official websites of [PyTorch](https://pytorch.org/get-started/locally/) and [CUDA](https://developer.nvidia.com/cuda-downloads) for detailed instructions.
 

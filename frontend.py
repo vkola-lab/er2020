@@ -3,11 +3,23 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 import numpy as np
-from util import KneeData, run_model
+from util import run_model, get_args
+from dataloader import KneeData, KneeManager
 from collections import Counter
-from util import get_args, KneeManager
-from dict_labels import get_label_pain_uni as get_label
 import cv2, glob, scipy.ndimage
+
+
+def get_label(path):
+    """
+    labels: dict() with keys: {'label': label, 1 for right knee, 0 for left knee,
+                               'ID_selected': Selected subject ID
+
+    """
+    labels = {'label': np.load(path + '/label.npy'),
+              'ID_selected': np.load(path + '/ID_selected.npy')}
+
+    return labels
+
 
 class KneeCAM:
     def __init__(self, out_class):
@@ -15,10 +27,10 @@ class KneeCAM:
 
         """ Training Parameters"""
         train_args = vars(get_args())
-        train_args['NumEpochs'] = 300
+        train_args['NumEpochs'] = 500
         train_args['BatchSize'] = 16 * 4
         train_args['ValGamma'] = 0.9
-        train_args['ValLr'] = 1e-6 * 5
+        train_args['ValLr'] = 1e-4
         train_args['ValWeightDecay'] = 0.00
         train_args['RunPar'] = True
         train_args['use_gpu'] = [0]
@@ -38,7 +50,9 @@ class KneeCAM:
                    'trial_name': 'Pain_uni_present'}
 
         """ Create and save Manager"""
-        self.Manager = KneeManager(options=options, train_args=train_args, labels=get_label(), out_class=out_class)
+        self.Manager = KneeManager(options=options, train_args=train_args,
+                                   labels=get_label('Fusion_Results/' + options['trial_name']),
+                                   out_class=out_class)
         print(self.Manager.options)
         print(self.Manager.train_args)
 
@@ -49,16 +63,9 @@ class KneeCAM:
             os.mkdir('cam_print/')
 
     def prep_training(self, num_case, num_loc, text_name, training, cont):
+
         Manager = self.Manager
         options = Manager.options
-
-        """""""""
-        all_index: dict() with keys: {'train_index_0': training indices of class 0,
-                                      'train_index_1': training indices of class 1,
-                                      'val_index_0': validation indices of class 0,
-                                      'val_index_1': validation indices of class 1,
-                                      'test_index': test indices
-        """""""""
         all_index = Manager.prep_case(num_case)
         dirname = os.path.join(Manager._path['save_path'] + str(num_case), str(num_loc))
 
@@ -291,11 +298,10 @@ def registration(sequences):
                                       warp_mode=cv2.MOTION_TRANSLATION, iters=500, eps=1e-10)
 
             y = cv2.warpAffine(uint16_to_8(np.load(x)), warp_matrix, target.shape[:2],
-                flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+                               flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
 
-            y = y[77: -77, 50: -100, :]
+            y = y[77: -77, 50: -100, :]  # cropped by a region of 294 X 294
             y[y > 800] = 800
-
             y = scipy.ndimage.zoom(y, (224 / 294, 224 / 294, 1))
 
             np.save('data/registered/' + seq + '/' + name, y)
