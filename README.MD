@@ -2,7 +2,7 @@
 
 ### Prerequisites
 
-The tool was developped based on the following dependencies:
+The tool was developed based on the following dependencies:
 
 1. PyTorch (1.1 or greater).
 2. NumPy (1.16 or greater).
@@ -10,13 +10,14 @@ The tool was developped based on the following dependencies:
 4. OpenCV (3.4.2 or greater)
 5. scikit-learn (0.21.2 or greater)
 
-Please note that the dependencies may require Python 3.6 or greater. It is recommended to install and maintain all packages using [`conda`](https://www.anaconda.com/). For installation of GPU accelerated PyTorch, additional effort may be required. Please check the official websites of [PyTorch](https://pytorch.org/get-started/locally/) and [CUDA](https://developer.nvidia.com/cuda-downloads) for detailed instructions.
+Please note that the dependencies require Python 3.6 or greater. We recommend installation and maintenance of all packages using [`conda`](https://www.anaconda.com/). For installation of GPU accelerated PyTorch, additional effort may be required. Please check the official websites of [PyTorch](https://pytorch.org/get-started/locally/) and [CUDA](https://developer.nvidia.com/cuda-downloads) for detailed instructions.
 
 ### Data files
 Original imaging file in .npy stored in:
 ```bash
 data/raw/NAME_OF_SEQUENCE/*.npy
 ```
+
 Registered imaging file in.npy stored in:
 ```bash
 data/registered/NAME_OF_SEQUENCE/*.npy
@@ -28,7 +29,7 @@ SAG_IW_TSE_LEFT & SAG_IW_TSE_RIGHT
 ```
 
 ## Examples
-To start a fresh training with learning rate of 1e-4, batch size of 64, and learning rate decay of 0.9
+To start a new training job with learning rate of 1e-4, batch size of 64, and learning rate decay of 0.9
 ```bash
 $ python main.py --lr 0.0001 --bs 64 --gamma 0.9
 ```
@@ -36,7 +37,7 @@ To perform linear registration
 ```bash
 $ python main.py --r
 ```
-To continue a training from saved checkpoint:
+To continue model training from a saved checkpoint:
 ```bash
 $ python main.py --c
 ```
@@ -44,13 +45,13 @@ $ python main.py --c
 ## <a name="Arguments"></a>Arguments
 
 1 . `--rp`:
->> Run with multiple GPUs paralleling.
+>> Run using multiple GPUs in parallel.
 
 2 .  `--r`:
->> Run with performing linear registration.
+>> Run along with linear registration.
 
 3 . `--c`:
->> Run with the saved checkpoints.
+>> Run using the saved checkpoints.
 
 4 . `--lr`: *float*
 >> Learning rate, default is 1e-4
