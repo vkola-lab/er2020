@@ -1,4 +1,6 @@
-# Pairwise learning of MRI scans using a convolutional Siamese network for prediction of knee pain
+# Assessment of knee pain from MR imaging using a convolutional Siamese network
+
+This work is published in European Radiology (https://www.european-radiology.org).
 
 ### Prerequisites
 
