@@ -2,6 +2,8 @@
 
 This work is published in European Radiology (https://www.european-radiology.org).
 
+<img src="Figure.png" width="600"/> 
+
 ### Prerequisites
 
 The tool was developed based on the following dependencies:
