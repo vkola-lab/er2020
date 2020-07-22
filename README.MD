@@ -1,6 +1,6 @@
 # Assessment of knee pain from MR imaging using a convolutional Siamese network
 
-This work is published in European Radiology (https://www.european-radiology.org).
+This work is published in *European Radiology* (https://doi.org/10.1007/s00330-020-06658-3).
 
 <img src="Figure.png" width="600"/> 
 
