@@ -17,20 +17,33 @@ The tool was developed based on the following dependencies:
 Please note that the dependencies require Python 3.6 or greater. We recommend installation and maintenance of all packages using [`conda`](https://www.anaconda.com/). For installation of GPU accelerated PyTorch, additional effort may be required. Please check the official websites of [PyTorch](https://pytorch.org/get-started/locally/) and [CUDA](https://developer.nvidia.com/cuda-downloads) for detailed instructions.
 
 ### Data files
-Pairs of images and masks of segmentation should be put in:
+Original imaging file in .npy stored in:
 ```bash
-data/CASE_NAME/train_imgs/*.npy
-data/CASE_NAME/train_masks/*.npy
+data/raw/NAME_OF_SEQUENCE/*.npy
 ```
-for training dataset and
+
+Registered imaging file in.npy stored in:
 ```bash
-data/CASE_NAME/eval_imgs/*.npy
-data/CASE_NAME/eval_masks/*.npy
+data/registered/NAME_OF_SEQUENCE/*.npy
 ```
-for validation dataset. 
-The labels used for classification should be put as:
+
+Name of sequences contain
 ```bash
-data/CASE_NAME/label.npy
+SAG_IW_TSE_LEFT & SAG_IW_TSE_RIGHT
+```
+
+## Examples
+To start a new training job with learning rate of 1e-4, batch size of 64, and learning rate decay of 0.9
+```bash
+$ python main.py --lr 0.0001 --bs 64 --gamma 0.9
+```
+To perform linear registration
+```bash
+$ python main.py --r
+```
+To continue model training from a saved checkpoint:
+```bash
+$ python main.py --c
 ```
 
 ## <a name="Arguments"></a>Arguments
@@ -56,3 +69,8 @@ data/CASE_NAME/label.npy
 
 7 . `--bs`: *int*
 >> Batch size, default is 64
+
+
+## Authors
+
+* **Gary Han Chang**, garyhanchang@gmail.com - Kolachalama laboratory, Boston University School of Medicine
