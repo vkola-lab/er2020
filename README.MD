@@ -2,6 +2,8 @@
 
 This work is published in *European Radiology* (https://doi.org/10.1007/s00330-020-06658-3).
 
+# Introduction
+
 <img src="Figure.png" width="600"/> 
 
 ### Prerequisites
